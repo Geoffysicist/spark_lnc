@@ -1379,7 +1379,7 @@ output3 = max(output3, flame_height);</input>
   <input globalname="Output 10"></input>
   <input globalname="Output 11"></input>
   <input globalname="Output 12"></input>
-  <input globalname="Project name">LNC_Latest</input>
+  <input globalname="Project name">LNC_latest_py</input>
   <input globalname="PostGIS database name"></input>
   <input globalname="PostGIS host name"></input>
   <input globalname="PostGIS schema name"></input>
@@ -1389,20 +1389,45 @@ output3 = max(output3, flame_height);</input>
   <input globalname="PostGIS append script"></input>
   <input globalname="Vertical levels">1</input>
   <input globalname="Vertical level spacing">0</input>
-  <input globalname="Shape file input source"></input>
+  <input globalname="Shape file input source">C:/Users/ggoldrick/Documents/GitHub/Geoffysicist/spark_lnc/Input/ignitions/fire_test.shp</input>
   <input globalname="GeoJSON input source">{
     &quot;features&quot;: [
         {
             &quot;geometry&quot;: {
                 &quot;coordinates&quot;: [
-                    152.84230405819085,
-                    -30.606294846002235
+                    [
+                        152.72428850023854,
+                        -30.771665830462204
+                    ],
+                    [
+                        152.73918925657898,
+                        -30.75291971764681
+                    ],
+                    [
+                        152.75264800424134,
+                        -30.748113022053122
+                    ],
+                    [
+                        152.7564933607163,
+                        -30.756765074121763
+                    ],
+                    [
+                        152.75072532600385,
+                        -30.767820473987253
+                    ],
+                    [
+                        152.7406312652571,
+                        -30.77887587385274
+                    ],
+                    [
+                        152.73390189142594,
+                        -30.783682569446434
+                    ]
                 ],
-                &quot;type&quot;: &quot;Point&quot;
+                &quot;type&quot;: &quot;LineString&quot;
             },
             &quot;properties&quot;: {
-                &quot;radius&quot;: 90,
-                &quot;time&quot;: &quot;2020-08-22T12:00:00+10:00&quot;
+                &quot;id&quot;: 1
             },
             &quot;type&quot;: &quot;Feature&quot;
         }
@@ -1414,11 +1439,7 @@ output3 = max(output3, flame_height);</input>
   <input globalname="Simulation duration hours">24</input>
   <input globalname="Simulation projection WKT">EPSG:28356</input>
   <input globalname="Simulation resolution">30</input>
-  <input globalname="Start point script">long = [152.845]
-lat = [-30.5933]
-radius = [120]
-# time = [3600]
-time = [&quot;2020-08-22T13:00:00+10:00&quot;]</input>
+  <input globalname="Start point script"></input>
   <input globalname="Start condition projection WKT">EPSG:4326</input>
   <input globalname="Start time">2020-08-22T06:00:00+10:00</input>
   <input globalname="End time"></input>
