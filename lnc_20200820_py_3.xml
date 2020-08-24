@@ -1414,7 +1414,11 @@ output3 = max(output3, flame_height);</input>
   <input globalname="Simulation duration hours">24</input>
   <input globalname="Simulation projection WKT">EPSG:28356</input>
   <input globalname="Simulation resolution">30</input>
-  <input globalname="Start point script"></input>
+  <input globalname="Start point script">long = [152.845]
+lat = [-30.5933]
+radius = [120]
+# time = [3600]
+time = [&quot;2020-08-22T13:00:00+10:00&quot;]</input>
   <input globalname="Start condition projection WKT">EPSG:4326</input>
   <input globalname="Start time">2020-08-22T06:00:00+10:00</input>
   <input globalname="End time"></input>

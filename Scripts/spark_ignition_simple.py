@@ -7,7 +7,7 @@ Projection:
 EPSG:4283 - GDA94 - Geographic
 '''
 
-long = [152.5];
-lat = [-31.0];
-radius = [120];
-time = [0];
+long = [152.842]
+lat = [-30.6063]
+radius = [120]
+time = [0]
