@@ -238,13 +238,16 @@ if DEBUG:
             except IndexError:
                 print(&quot;&quot;, end=&quot;\t&quot;)
         print('')</input>
-  <input globalname="Series/Source file">C:/Users/ggoldrick/Documents/GitHub/Geoffysicist/spark_lnc/Input/weather_series/2020-08-22-11-49-32_PointForecast.csv</input>
+  <input globalname="Series/Source file">C:/Users/ggoldrick/Documents/GitHub/Geoffysicist/spark_lnc/Input/weather_series/2020-08-25-20-12-15_PointForecast.csv</input>
   <input globalname="Series/Time zone">+10:00</input>
   <input globalname="Series/Wind speed stdev">0</input>
   <input globalname="Series/Wind bearing stdev">0</input>
-  <input globalname="Initialisation Python input file"></input>
-  <input globalname="Initialisation Python input file 2"></input>
-  <input globalname="Initialisation Python script">import json
+  <input globalname="Initialisation Python input file">./Input/vegetation_lookup/lnc_vegetation_2.csv</input>
+  <input globalname="Initialisation Python input file 2">C:/Users/ggoldrick/Documents/GitHub/Geoffysicist/spark_lnc/Scripts/initStr_starter.c</input>
+  <input globalname="Initialisation Python script">''' Define the display labels of the output raster layers.
+'''
+
+import json
 
 # Write to JSON
 JSON = {
@@ -281,217 +284,221 @@ JSON = {
         }
     ]
 }
-outputJSON = json.dumps(JSON)</input>
+outputJSON = json.dumps(JSON)
+
+
+''' land_to_fuel reclass - reclassify a land class raster to a fuel class.
+
+Uses a csv lookup table to reclassify a land class into a fuel class
+Generates an OpenCL C script and appends that to the initString variable of the 
+Spark framework so that it executes between the start init code and the end init code.
+
+Inputs:
+fileName - the filename of the *.csv lookup table
+'''
+
+DEBUG = True  #set True if running this script outside of the Spark framework
+
+import csv
+
+#-----------------------------------------------------------------
+# a bit of set up stuff
+
+lc_header = 'Land class'
+lc_description = 'Description'
+fc_header = 'Fuel class'
+
+spread_models = ['unburnable', 
+                'fc_grassland',
+                'fc_woodland',
+                'fc_sclerophyll_dry',
+                'fc_sclerophyll_wet',
+                'fc_rainforest',
+                'fc_other_forest',
+                'fc_heath_coastal',
+                'fc_heath_semi_arid',
+                'fc_pine',
+                'fc_moorlands',
+                'fc_wetlands',
+                'fc_urban']
+
+if DEBUG:
+    fileName = './Input/vegetation_lookup/lnc_vegetation_2.csv'
+    fileName2 = './Scripts/initStr_starter.c'
+    initString = &quot;&quot;
+
+
+#------------------------------------------------------------------
+# Define fuel classes and land classes as objects
+
+class FuelClass(object):
+    ''' Fuel type class.
+
+    Used to store attributes of the fuel class including a list
+    of the land classes it is comprised of. The land classes should correspond to the
+    'land classification' raster layer in the Spark framework.
+
+    Attributes:
+        _fuel_class: an integer between 1 and 12 corresponding to a Spark spread model.
+        _land_classes[]: a list of the land classes comprising the fuel class.
+        _name: a string naming the class, default value &quot;&quot;
+        _description: a string giving a short deacription of the class, default value &quot;&quot;
+
+    '''
+
+    def __init__(self, fuel_class: int):
+        '''Inits FuelClass with a class corrspondinig to the Spark spread models.
+        
+        The value of fuel_class should be between 1 and 12.
+        '''
+        self._fuel_class = fuel_class
+        self._land_classes = []
+        self._name = &quot;&quot;
+        self._description = &quot;&quot;
+
+    def add_land_class(self, land_class):
+        '''adds a land class to the list of land classes that comprise this fuel class.'''
+        self._land_classes.append(land_class)
+
+    def set_name(self, name: str):
+        '''Sets the name of the fuel class.'''
+        self._name = name
+
+    def set_description(self, description: str):
+        '''Sets the description of the fuel class.'''
+        self._description = description
+
+    def get_class(self) -&gt; int:
+        '''Gets the name of the fuel class.'''
+        return self._fuel_class
+
+    def get_name(self) -&gt; str:
+        '''Gets the name of the fuel class.'''
+        return self._name
+
+    def get_description(self) -&gt; str:
+        '''Gets the description of the fuel class.'''
+        return self._description
+
+    def get_land_classes(self):
+        return self._land_classes
+
+class LandClass(object):
+    ''' Land type class.
+
+    Used to hold attributes of a land classes.
+
+    Attributes:
+        _land_class: an integer corresponding to the Spark land classification raster and the lookup csv
+        _name: a string naming the class, default value &quot;&quot;
+        _description: a string giving a short deacription of the class, default value &quot;&quot;
+        _fuel_class: int indicating the fuelclass to which it belongs
+    '''
+
+    def __init__(self, land_class: int):
+        '''Inits LandClass with a class corrsponding to a column in the lookup csv
+        '''
+
+        self._land_class = land_class
+        self._name = &quot;&quot;
+        self._description = &quot;&quot;
+
+    def set_name(self, name: str):
+        '''Sets the name of the land class.'''
+        self._name = name
+
+    def set_description(self, description: str):
+        '''Sets the description of the land class.'''
+        self._description = description
+
+    def get_class(self) -&gt; int:
+        '''Gets the name of the land class.'''
+        return self._land_class
+
+    def get_name(self) -&gt; str:
+        '''Gets the name of the land class.'''
+        return self._name
+
+    def get_description(self) -&gt; str:
+        '''Gets the description of the land class.'''
+        return self._description
+
+#---------------------------------------------------------
+# now shit gets real
+
+headers = True #set true for first row of lookup table to get header indices
+lc_idx = -1
+lc_desc_idx = -1
+fc_idx = -1
+
+lc_idx_array = [] # a list of unique land indices. Used to prevent duplication.
+fc_idx_array = [] # a list of unique fuel indices. Used to prevent duplication.
+# lc_array = []
+fc_array = []
+
+with open(fileName) as f:
+    lookup = csv.reader(f)
+    header = True
+
+    for row in lookup:
+        if header:
+            for i in range(len(row)):
+                if row[i] == lc_header:
+                    lc_idx = i
+                elif row[i] == lc_description:
+                    lc_desc_idx = i
+                elif row[i] == fc_header:
+                    fc_idx = i
+        
+            header = False
+
+        else:
+            if row[fc_idx] not in fc_idx_array: #need to create a new fuel class
+                fc = FuelClass(row[fc_idx])
+                fc_idx_array.append(row[fc_idx])
+                fc_array.append(fc)
+            
+            if row[lc_idx] not in lc_idx_array: # need to create new land class
+                lc = LandClass(row[lc_idx])
+                if lc_desc_idx &gt; -1:
+                    lc.set_description(row[lc_desc_idx])
+                lc_idx_array.append(row[lc_idx])
+                # lc_array.append(lc)
+
+                # add the new land class to the relevant fuel class
+                for fc in fc_array:
+                    if fc.get_class() == row[fc_idx]:
+                        fc.add_land_class(lc)
+                
+if DEBUG:
+    #print out the list of fuel classes and their land classes                
+    for fc in fc_array:
+        land_class_str = ' '.join([str(elem.get_class()) for elem in fc.get_land_classes()]) 
+        print(f'fuel class: {fc.get_class()}, land classes: {land_class_str}')
+
+    print('\n\n')        
+
+    
+with open(fileName2) as s:
+    s_lines = s.readlines()
+
+for line in s_lines:
+    initString += line
+    
+    if 'insert reclass rules here' in line:
+        for fc in fc_array:
+            for lc in fc.get_land_classes():
+                initString += f'    case {lc.get_class()}:    // {lc.get_description()}\n'
+
+            initString += f'        class = {fc.get_class()};    // {spread_models[int(fc.get_class())]}\n'
+            initString += '        break;\n\n'
+
+if DEBUG:
+    with open('./Scripts/landclass_to_fuelclass.c', 'w') as f:
+        f.write(initString)
+        print('output to ./Scripts/landclass_to_fuelclass.c\n\n')</input>
   <input globalname="Initialisation end string"></input>
-  <input globalname="Initialisation start string">// Reclassify veg types into fuel classes
-// 
-// Define the fuel classes
-
-short fc_grassland = 1;
-short fc_woodland = 2;
-short fc_sclerophyll_dry = 3;
-short fc_sclerophyll_wet = 3; //TODO change back to 4
-short fc_rainforest = 5;
-short fc_other_forest = 6;
-short fc_heath_coastal = 7;
-short fc_heath_semi_arid = 8;
-short fc_pine = 9;
-short fc_moorlands = 10;
-short fc_wetlands = 11;
-short fc_urban = 12;
-
-
-
-switch(class)
-{
-    case 156:    // Cleared
-    case 327:    // Cleared
-    case 344:    // Cleared
-    case 501:    // Cleared
-    case 560:    // Cleared
-    case 642:    // Cleared
-    case 1038:    // Cleared
-    case 515:    // MaritimeGrasslands
-    case 596:    // MaritimeGrasslands
-    case 1054:    // MaritimeGrasslands
-        class = fc_grassland;
-        break;
-
-    case 610:    // TablelandClayGrassyWoodlands
-    case 342:    // CoastalValleyGrassyWoodlands
-    case 350:    // CoastalValleyGrassyWoodlands
-    case 513:    // CoastalValleyGrassyWoodlands
-    case 594:    // CoastalValleyGrassyWoodlands
-        class = fc_woodland;
-        break;
-    
-    case 331:    // CoastalDuneDrySclerophyllForests
-    case 506:    // CoastalDuneDrySclerophyllForests
-    case 570:    // CoastalDuneDrySclerophyllForests
-    case 603:    // CoastalDuneDrySclerophyllForests
-    case 656:    // CoastalDuneDrySclerophyllForests
-    case 1042:    // CoastalDuneDrySclerophyllForests
-    case 332:    // NorthCoastDrySclerophyllForests
-    case 573:    // NorthernEscarpmentDrySclerophyllForests
-    case 574:    // NorthernTablelandDrySclerophyllForests
-    case 160:    // CoastalFloodplainForests
-    case 509:    // CoastalFloodplainForests
-    case 582:    // CoastalFloodplainForests
-    case 614:    // CoastalFloodplainForests
-    case 675:    // CoastalFloodplainForests
-    case 348:    // EasternRiverineForests
-    case 583:    // EasternRiverineForests
-    case 588:    // NorthernGorgeDrySclerophyllForests
-    case 618:    // NorthernGorgeDrySclerophyllForests
-    case 326:    // Hunter-MacleayDrySclerophyllForests
-    case 339:    // Hunter-MacleayDrySclerophyllForests
-    case 349:    // Hunter-MacleayDrySclerophyllForests
-    case 511:    // Hunter-MacleayDrySclerophyllForests
-    case 591:    // Hunter-MacleayDrySclerophyllForests
-       class = fc_sclerophyll_dry;
-        break;
-
-    case 330:    // NorthCoastWetSclerophyllForests
-    case 345:    // NorthCoastWetSclerophyllForests
-    case 505:    // NorthCoastWetSclerophyllForests
-    case 540:    // NorthCoastWetSclerophyllForests
-    case 566:    // NorthCoastWetSclerophyllForests
-    case 599:    // NorthCoastWetSclerophyllForests
-    case 647:    // NorthCoastWetSclerophyllForests
-    case 1041:    // NorthCoastWetSclerophyllForests
-    case 346:    // NorthernEscarpmentWetSclerophyllForests
-    case 541:    // NorthernEscarpmentWetSclerophyllForests
-    case 567:    // NorthernEscarpmentWetSclerophyllForests
-    case 600:    // NorthernEscarpmentWetSclerophyllForests
-    case 542:    // NorthernTablelandWetSclerophyllForests
-    case 568:    // NorthernTablelandWetSclerophyllForests
-    case 601:    // NorthernTablelandWetSclerophyllForests
-    case 333:    // NorthernHinterlandWetSclerophyllForests
-    case 347:    // NorthernHinterlandWetSclerophyllForests
-    case 507:    // NorthernHinterlandWetSclerophyllForests
-    case 543:    // NorthernHinterlandWetSclerophyllForests
-    case 572:    // NorthernHinterlandWetSclerophyllForests
-    case 605:    // NorthernHinterlandWetSclerophyllForests
-    case 657:    // NorthernHinterlandWetSclerophyllForests
-    case 1044:    // NorthernHinterlandWetSclerophyllForests
-        class = fc_sclerophyll_wet;
-        break;
-    
-    case 334:    // WallumSandHeaths
-    case 576:    // WallumSandHeaths
-    case 1045:    // WallumSandHeaths
-    case 510:    // CoastalHeathSwamps
-    case 584:    // CoastalHeathSwamps
-    case 1048:    // CoastalHeathSwamps
-    case 340:    // CoastalHeadlandandForeduneScrubs
-    case 1052:    // CoastalHeadlandandForeduneScrubs
-        class = fc_heath_coastal;  // Coastal Heath
-        break;
-    
-    case 158:    // SubtropicalRainforests
-    case 328:    // SubtropicalRainforests
-    case 502:    // SubtropicalRainforests
-    case 536:    // SubtropicalRainforests
-    case 555:    // SubtropicalRainforests
-    case 561:    // SubtropicalRainforests
-    case 598:    // SubtropicalRainforests
-    case 503:    // NorthernWarmTemperateRainforests
-    case 537:    // NorthernWarmTemperateRainforests
-    case 556:    // NorthernWarmTemperateRainforests
-    case 562:    // NorthernWarmTemperateRainforests
-    case 538:    // CoolTemperateRainforests
-    case 557:    // CoolTemperateRainforests
-    case 539:    // DryRainforests
-    case 558:    // DryRainforests
-    case 564:    // DryRainforests
-    case 329:    // LittoralRainforests
-    case 504:    // LittoralRainforests
-    case 559:    // LittoralRainforests
-    case 1040:    // LittoralRainforests
-        class = fc_rainforest;
-        break;
-
-    case 544:    // NorthernMontaneHeaths
-    case 159:    // CoastalSwampForests
-    case 335:    // CoastalSwampForests
-    case 508:    // CoastalSwampForests
-    case 581:    // CoastalSwampForests
-    case 1046:    // CoastalSwampForests
-        class = fc_other_forest;
-        break;
-
-    case 161:    // CoastalFreshwaterLagoonsandFloodplainMeadows
-    case 337:    // CoastalFreshwaterLagoonsandFloodplainMeadows
-    case 1049:    // CoastalFreshwaterLagoonsandFloodplainMeadows
-    case 211:    // MangroveSwamps
-    case 338:    // MangroveSwamps
-    case 586:    // MangroveSwamps
-    case 681:    // MangroveSwamps
-    case 212:    // Saltmarshes
-    case 341:    // Saltmarshes
-    case 512:    // Saltmarshes
-    case 691:    // Saltmarshes
-    case 1053:    // Saltmarshes
-    case 213:    // SeagrassMeadows
-    case 514:    // SeagrassMeadows
-    case 711:    // SeagrassMeadows
-    case 597:    // TemperateSwampForests
-    case 343:    // Floodplain-EstuarineTransitionForests
-    case 351:    // Floodplain-EstuarineTransitionForests
-        class = fc_wetlands;
-        break;
-    
-    case 336:    // MontaneBogsandFens
-        class = fc_moorlands;
-        break;
-
-    default:    // Won't burn or no data
-        class = 0;
-}
-
-//Initialise the custom inputs for the Dry Schlorophyll model
-// modified geoff.goldrick@protonmail.com 2020-08-18 
-
-// Set dry eucalypt parameters
-bool useExponential = false;
-bool useTall = true;
-if (useExponential) {
-
-  // Gould 2011 exponential model, uses fire_history in years
-  if (useTall) {
-
-    // Tall shrub
-    fhs_surface = 3.39*(1-exp(-0.030*fire_history*12));
-    fhs_near_surface = 2.95*(1-exp(-0.022*fire_history*12));
-    h_near_surface = 23.33*(1-exp(-0.025*fire_history*12));
-
-  } else {
-
-    // Low shrub
-    fhs_surface = 3.33*(1-exp(-1*0.035*fire_history*12));
-    fhs_near_surface = 2.81*(1-exp(-1*0.018*fire_history*12));
-    h_near_surface = 20.02*(1-exp(-1*0.035*fire_history*12));
-  }
-} else {
-
-  // Gould 2011 hyperbolic model, uses fire_history in years
-  if (useTall) {
-
-    // Tall shrub
-    fhs_surface = (4.03*fire_history*12)/(27.93+fire_history*12);
-    fhs_near_surface = (3.77*fire_history*12)/(48.93+fire_history*12);
-    h_near_surface = (28.11*fire_history*12)/(33.84+fire_history*12);
-
-  } else {
-
-    // Low shrub
-    fhs_surface = (3.78*fire_history*12)/(20.69+fire_history*12);
-    fhs_near_surface = (3.44*fire_history*12)/(50.73+fire_history*12);
-    h_near_surface = (22.22*fire_history*12)/(18.55+fire_history*12);
-  }
-}
-
-</input>
+  <input globalname="Initialisation start string"></input>
   <input globalname="Output isochrone time">0</input>
   <input globalname="Output shape file">./Output/isochrone.shp</input>
   <input globalname="Output spot fire shape file"></input>
@@ -1389,15 +1396,218 @@ output3 = max(output3, flame_height);</input>
   <input globalname="PostGIS append script"></input>
   <input globalname="Vertical levels">1</input>
   <input globalname="Vertical level spacing">0</input>
-  <input globalname="Shape file input source">C:/Users/ggoldrick/Documents/GitHub/Geoffysicist/spark_lnc/Input/ignitions/lnc_ignitions_latest.shp</input>
-  <input globalname="GeoJSON input source"></input>
+  <input globalname="Shape file input source">C:/Users/ggoldrick/Documents/GitHub/Geoffysicist/spark_lnc/Input/ignitions/lni_ignition_latest.shp</input>
+  <input globalname="GeoJSON input source">{
+    &quot;features&quot;: [
+        {
+            &quot;geometry&quot;: {
+                &quot;coordinates&quot;: [
+                    [
+                        152.88521429550187,
+                        -30.582142694892717
+                    ],
+                    [
+                        152.88669522549063,
+                        -30.581587346146936
+                    ]
+                ],
+                &quot;type&quot;: &quot;LineString&quot;
+            },
+            &quot;properties&quot;: {
+                &quot;Name&quot;: &quot;valley valley 1&quot;,
+                &quot;date&quot;: &quot;20200824&quot;,
+                &quot;id&quot;: 2
+            },
+            &quot;type&quot;: &quot;Feature&quot;
+        },
+        {
+            &quot;geometry&quot;: {
+                &quot;coordinates&quot;: [
+                    [
+                        152.90057894413513,
+                        -30.58189587322793
+                    ],
+                    [
+                        152.90156623079432,
+                        -30.58294486530329
+                    ],
+                    [
+                        152.9021832849563,
+                        -30.583438508632874
+                    ],
+                    [
+                        152.90286204453446,
+                        -30.58411726821105
+                    ],
+                    [
+                        152.90354080411265,
+                        -30.584857733205425
+                    ],
+                    [
+                        152.90323227703166,
+                        -30.585413081951206
+                    ],
+                    [
+                        152.90286204453446,
+                        -30.586030136113184
+                    ],
+                    [
+                        152.90286204453446,
+                        -30.586030136113184
+                    ]
+                ],
+                &quot;type&quot;: &quot;LineString&quot;
+            },
+            &quot;properties&quot;: {
+                &quot;Name&quot;: &quot;valley valley 2&quot;,
+                &quot;date&quot;: &quot;20200824&quot;,
+                &quot;id&quot;: 3
+            },
+            &quot;type&quot;: &quot;Feature&quot;
+        },
+        {
+            &quot;geometry&quot;: {
+                &quot;coordinates&quot;: [
+                    [
+                        152.89706173541185,
+                        -30.572825177046838
+                    ],
+                    [
+                        152.89767878957383,
+                        -30.57239323913345
+                    ],
+                    [
+                        152.89848095998443,
+                        -30.57183789038767
+                    ],
+                    [
+                        152.89848095998443,
+                        -30.57183789038767
+                    ]
+                ],
+                &quot;type&quot;: &quot;LineString&quot;
+            },
+            &quot;properties&quot;: {
+                &quot;Name&quot;: &quot;valley valley 3&quot;,
+                &quot;date&quot;: &quot;20200824&quot;,
+                &quot;id&quot;: 4
+            },
+            &quot;type&quot;: &quot;Feature&quot;
+        },
+        {
+            &quot;geometry&quot;: {
+                &quot;coordinates&quot;: [
+                    [
+                        152.887435690485,
+                        -30.577267967013086
+                    ],
+                    [
+                        152.88786762839837,
+                        -30.57634238577012
+                    ]
+                ],
+                &quot;type&quot;: &quot;LineString&quot;
+            },
+            &quot;properties&quot;: {
+                &quot;Name&quot;: &quot;valley valley 05&quot;,
+                &quot;date&quot;: &quot;20200824&quot;,
+                &quot;id&quot;: 5
+            },
+            &quot;type&quot;: &quot;Feature&quot;
+        },
+        {
+            &quot;geometry&quot;: {
+                &quot;coordinates&quot;: [
+                    [
+                        152.84853042557225,
+                        -31.019649522089793
+                    ],
+                    [
+                        152.84812934036697,
+                        -31.01906332063591
+                    ],
+                    [
+                        152.84771282880763,
+                        -31.018662235430625
+                    ],
+                    [
+                        152.8472346118321,
+                        -31.018399987411783
+                    ],
+                    [
+                        152.84661755767013,
+                        -31.018399987411783
+                    ],
+                    [
+                        152.84601592986218,
+                        -31.01880107261707
+                    ],
+                    [
+                        152.84553771288665,
+                        -31.019310142300704
+                    ],
+                    [
+                        152.84563027101095,
+                        -31.019772932922187
+                    ],
+                    [
+                        152.84630903058914,
+                        -31.020189444481524
+                    ],
+                    [
+                        152.8471420537078,
+                        -31.020420839792266
+                    ],
+                    [
+                        152.8477591078698,
+                        -31.020312855313918
+                    ],
+                    [
+                        152.84862298369654,
+                        -31.020174018127474
+                    ]
+                ],
+                &quot;type&quot;: &quot;LineString&quot;
+            },
+            &quot;properties&quot;: {
+                &quot;Name&quot;: &quot;collobatti&quot;,
+                &quot;date&quot;: &quot;20200825&quot;,
+                &quot;id&quot;: 7
+            },
+            &quot;type&quot;: &quot;Feature&quot;
+        },
+        {
+            &quot;geometry&quot;: {
+                &quot;coordinates&quot;: [
+                    [
+                        152.7407156371204,
+                        -31.12113950538149
+                    ],
+                    [
+                        152.74170292377954,
+                        -31.12113950538149
+                    ]
+                ],
+                &quot;type&quot;: &quot;LineString&quot;
+            },
+            &quot;properties&quot;: {
+                &quot;Name&quot;: &quot;dondingalong&quot;,
+                &quot;date&quot;: &quot;20200825&quot;,
+                &quot;id&quot;: 2108
+            },
+            &quot;type&quot;: &quot;Feature&quot;
+        }
+    ],
+    &quot;type&quot;: &quot;FeatureCollection&quot;
+}
+</input>
   <input globalname="Simulation number script"></input>
   <input globalname="Simulation duration hours">24</input>
   <input globalname="Simulation projection WKT">EPSG:28356</input>
   <input globalname="Simulation resolution">30</input>
   <input globalname="Start point script"></input>
   <input globalname="Start condition projection WKT">EPSG:4326</input>
-  <input globalname="Start time">2020-08-22T06:00:00+10:00</input>
+  <input globalname="Start time">2020-08-25T06:00:00+10:00</input>
   <input globalname="End time"></input>
   <input globalname="Number of simulations">0</input>
   <input globalname="Random seed">0</input>

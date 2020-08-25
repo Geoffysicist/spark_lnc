@@ -1389,8 +1389,46 @@ output3 = max(output3, flame_height);</input>
   <input globalname="PostGIS append script"></input>
   <input globalname="Vertical levels">1</input>
   <input globalname="Vertical level spacing">0</input>
-  <input globalname="Shape file input source">C:/Users/ggoldrick/Documents/GitHub/Geoffysicist/spark_lnc/Input/ignitions/lnc_ignitions_latest.shp</input>
-  <input globalname="GeoJSON input source"></input>
+  <input globalname="Shape file input source">C:/Users/ggoldrick/Documents/GitHub/Geoffysicist/spark_lnc/Input/ignitions/lni_ignition_latest.shp</input>
+  <input globalname="GeoJSON input source">{
+    &quot;features&quot;: [
+        {
+            &quot;geometry&quot;: {
+                &quot;coordinates&quot;: [
+                    [
+                        152.78234924866496,
+                        -30.9671336097097
+                    ],
+                    [
+                        152.79704264968382,
+                        -30.971773631084073
+                    ],
+                    [
+                        152.80400268174537,
+                        -30.984147021415744
+                    ],
+                    [
+                        152.80554935553684,
+                        -31.00038709622606
+                    ],
+                    [
+                        152.8016826710582,
+                        -31.021267192410754
+                    ]
+                ],
+                &quot;type&quot;: &quot;LineString&quot;
+            },
+            &quot;properties&quot;: {
+                &quot;Name&quot;: &quot;test&quot;,
+                &quot;date&quot;: &quot;20200822&quot;,
+                &quot;id&quot;: 1
+            },
+            &quot;type&quot;: &quot;Feature&quot;
+        }
+    ],
+    &quot;type&quot;: &quot;FeatureCollection&quot;
+}
+</input>
   <input globalname="Simulation number script"></input>
   <input globalname="Simulation duration hours">24</input>
   <input globalname="Simulation projection WKT">EPSG:28356</input>
