@@ -152,7 +152,7 @@ with open(fileName) as f:
     header = True
 
     for row in lookup:
-        if header:
+        if header: # find the columns indices
             for i in range(len(row)):
                 if row[i] == lc_header:
                     lc_idx = i
